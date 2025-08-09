@@ -1,9 +1,39 @@
 // app/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { Tabs, useLocalSearchParams } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { Tabs, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
 
 export default function Layout() {
+  const router = useRouter();
   const { token } = useLocalSearchParams(); // ✅ get token from route
+
+  useEffect(() => {
+    // Handle taps while app is running / backgrounded
+    const sub = Notifications.addNotificationResponseReceivedListener((resp) => {
+      const jobId = resp?.notification?.request?.content?.data?.jobId as string | undefined;
+      if (jobId) {
+        router.replace({
+          pathname: '/(tabs)/home',
+          params: { token: token as string | undefined, openJobId: String(jobId) },
+        });
+      }
+    });
+
+    // Handle cold start (app launched by tapping a notification)
+    (async () => {
+      const last = await Notifications.getLastNotificationResponseAsync();
+      const jobId = last?.notification?.request?.content?.data?.jobId as string | undefined;
+      if (jobId) {
+        router.replace({
+          pathname: '/home',
+          params: { token: token as string | undefined, openJobId: String(jobId) },
+        });
+      }
+    })();
+
+    return () => sub.remove();
+  }, [router, token]);
 
   return (
     <Tabs screenOptions={{ headerShown: false }}>

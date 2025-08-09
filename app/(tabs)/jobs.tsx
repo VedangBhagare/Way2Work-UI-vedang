@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
 import axios from 'axios';
 import * as Location from 'expo-location';
@@ -13,7 +14,7 @@ import config from '../../config';
 
 const initialForm = {
   job_title: '',
-  job_type: null,
+  job_type: null as string | null,
   employer_name: '',
   street_address: '',
   city: '',
@@ -27,17 +28,19 @@ const initialForm = {
   job_description: '',
 };
 
+type User = { user_id: string; email: string; username: string };
+
 export default function Jobs() {
   const { token } = useLocalSearchParams();
-  const [user, setUser] = useState({ user_id: '', email: '', username: '' });
+  const [user, setUser] = useState<User>({ user_id: '', email: '', username: '' });
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(initialForm);
-  const [myJobs, setMyJobs] = useState([]);
-  const [allJobs, setAllJobs] = useState([]);
+  const [myJobs, setMyJobs] = useState<any[]>([]);
+  const [allJobs, setAllJobs] = useState<any[]>([]);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [region, setRegion] = useState<Region | null>(null);
   const [tab, setTab] = useState<'create' | 'myjobs' | 'alljobs'>('alljobs');
-  const [selectedJob, setSelectedJob] = useState(null);
+  const [selectedJob, setSelectedJob] = useState<any | null>(null);
 
   const handleChange = (name: string, value: string | null) => {
     setForm(prev => ({ ...prev, [name]: value }));
@@ -83,18 +86,70 @@ export default function Jobs() {
       const res = await axios.get(`${config.API_BASE_URL}/api/jobs/user/${uid}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      setMyJobs(res.data);
+      setMyJobs(res.data || []);
     } catch (error) {
       Alert.alert('Error', 'Failed to fetch jobs.');
     }
   };
 
-  // Fetch all jobs (for the public board)
+  // Fetch internal + external jobs and merge
   const fetchAllJobs = async () => {
     try {
-      const res = await axios.get(`${config.API_BASE_URL}/api/jobs`);
-      setAllJobs(res.data);
+      // 1) Ensure we have location permission + current coords
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required to show nearby jobs.');
+        // Even if denied, still show internal jobs
+      }
+
+      let lat: number | undefined;
+      let lon: number | undefined;
+
+      try {
+        const currentLocation = await Location.getCurrentPositionAsync({});
+        lat = currentLocation.coords.latitude;
+        lon = currentLocation.coords.longitude;
+      } catch {
+        // If we fail to get location, we’ll still show internal jobs
+      }
+
+      // 2) Load radius (default 50 if not set)
+      const saved = Number(await AsyncStorage.getItem('job_radius_km'));
+      const radiusKm = Number.isFinite(saved) && saved > 0 ? saved : 50;
+
+      // 3) Fetch INTERNAL jobs
+      const internalRes = await axios.get(`${config.API_BASE_URL}/api/jobs`);
+      const internal = Array.isArray(internalRes.data) ? internalRes.data : [];
+
+      // 4) Fetch EXTERNAL jobs (Adzuna) via your backend proxy (if we have coords)
+      let external: any[] = [];
+      if (typeof lat === 'number' && typeof lon === 'number') {
+        try {
+          const url = `${config.API_BASE_URL}/api/jobs/external/nearby?lat=${lat}&lon=${lon}&radius=${radiusKm}`;
+          const externalRes = await axios.get(url);
+          external = Array.isArray(externalRes.data) ? externalRes.data : [];
+        } catch (e) {
+          // If external fails, we still show internal
+          console.log('External jobs fetch failed:', e?.response?.data || e?.message);
+        }
+      }
+
+      // 5) Merge & de-dupe (prefer external first)
+      const seen = new Set<string>();
+      const mergeKey = (j: any) => String(j._id || j.job_id || `${j.job_title}-${j.employer_name}-${j.latitude}-${j.longitude}`);
+
+      const merged: any[] = [];
+      for (const j of [...external, ...internal]) {
+        const key = mergeKey(j);
+        if (!seen.has(key)) {
+          seen.add(key);
+          merged.push(j);
+        }
+      }
+
+      setAllJobs(merged);
     } catch (error) {
+      console.log('fetchAllJobs error', error);
       Alert.alert('Error', 'Failed to fetch all jobs.');
     }
   };
@@ -144,19 +199,23 @@ export default function Jobs() {
       city: job.job_location?.city || '',
       province: job.job_location?.province || '',
       postal_code: job.job_location?.postal_code || '',
-      latitude: job.latitude.toString(),
-      longitude: job.longitude.toString(),
-      number_of_positions: job.number_of_positions.toString(),
+      latitude: job.latitude?.toString?.() || String(job.latitude || ''),
+      longitude: job.longitude?.toString?.() || String(job.longitude || ''),
+      number_of_positions: String(job.number_of_positions || '1'),
     });
 
-    setRegion({
-      latitude: job.latitude,
-      longitude: job.longitude,
-      latitudeDelta: 0.01,
-      longitudeDelta: 0.01,
-    });
+    if (job.latitude && job.longitude) {
+      setRegion({
+        latitude: Number(job.latitude),
+        longitude: Number(job.longitude),
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    } else {
+      setRegion(null);
+    }
 
-    setEditingJobId(job.job_id);
+    setEditingJobId(job.job_id || job._id || null);
     setShowForm(true);
   };
 
@@ -196,7 +255,7 @@ export default function Jobs() {
         };
         setUser(userData);
         fetchMyJobs(userData.user_id);
-        fetchAllJobs();
+        await fetchAllJobs(); // includes external jobs now
       } catch (error) {
         Alert.alert("Error", "Could not fetch user info");
       }
@@ -315,6 +374,11 @@ export default function Jobs() {
               <Text>{job.job_type} • {job.city || job.job_location?.city}</Text>
             </TouchableOpacity>
           ))}
+          {allJobs.length === 0 && (
+            <Text style={{ color: '#888', marginTop: 6 }}>
+              No jobs found. Try increasing your radius in Profile.
+            </Text>
+          )}
         </View>
       )}
 
@@ -334,12 +398,20 @@ export default function Jobs() {
                 <TouchableOpacity onPress={() => handleEdit(job)}>
                   <Text style={{ color: '#1E90FF', fontWeight: '600' }}>Edit</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => handleDelete(job.job_id)}>
-                  <Text style={{ color: 'red', fontWeight: '600' }}>Delete</Text>
-                </TouchableOpacity>
+                {/* Only delete internal jobs that have a job_id */}
+                {!!job.job_id && (
+                  <TouchableOpacity onPress={() => handleDelete(job.job_id)}>
+                    <Text style={{ color: 'red', fontWeight: '600' }}>Delete</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </TouchableOpacity>
           ))}
+          {myJobs.length === 0 && (
+            <Text style={{ color: '#888', marginTop: 6 }}>
+              You haven’t created any jobs yet.
+            </Text>
+          )}
         </View>
       )}
 

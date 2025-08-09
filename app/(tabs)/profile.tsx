@@ -4,14 +4,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Button,
-  Modal,
+  Button, DeviceEventEmitter, Modal,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import config from '../../config';
 
@@ -92,6 +91,8 @@ const handleUpdate = async () => {
 
     try {
       await AsyncStorage.setItem('job_radius_km', newRadius);
+      console.log('EMIT jobRadiusChanged', Number(newRadius));
+      DeviceEventEmitter.emit('jobRadiusChanged', Number(newRadius)); // Notify other parts of the app
       setSavedRadius(newRadius);
       Alert.alert('Success', `Notification radius set to ${newRadius} KM`);
       setRadiusModalVisible(false);

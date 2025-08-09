@@ -45,7 +45,7 @@ export default function Login() {
       .then(data => {
         if (data.token) {
           console.log('JWT Token:', data.token);
-          router.replace('/(tabs)/home');
+          router.replace({ pathname: '/(tabs)/home', params: { token: data.token } });
         } else {
           Alert.alert('Login failed', data.message || 'Unknown error');
         }
