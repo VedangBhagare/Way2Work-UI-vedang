@@ -1,5 +1,53 @@
-# Welcome to your Expo app 👋
+# Way2Work-UI
 
+# Note: This is only front-end ropository. For backend repository clone it using https://github.com/VedangBhagare/way2work_backend. 
+
+**Way2Work-UI** is a mobile application developed using React Native and Expo, designed to streamline the way individuals discover and engage with employment opportunities. This project serves as a comprehensive solution for job seekers, providing features that facilitate job searching, application tracking, and career development.
+
+![Way2Work UI Demo](https://via.placeholder.com/800x400.png)
+
+## 🚀 Features
+
+- **User Authentication**: Secure login and registration system.
+- **Job Search**: Advanced filtering options to find suitable job listings.
+- **Application Tracker**: Monitor the status of job applications in real-time.
+- **Notifications**: Receive timely alerts for new job postings and application updates.
+- **Profile Management**: Create and update personal profiles with ease.
+
+## 🛠️ Tech Stack
+
+- **Frontend**: React Native, Expo
+- **Database**: MongoDB Atlas
+- **Backend**: Firebase (Authentication, Firestore), Express.js, Node.js
+- **State Management**: React Context API
+- **Navigation**: React Navigation
+- **Styling**: Tailwind CSS
+
+## 📱 Installation
+
+To run the project locally:
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/steffy199/Way2Work-UI.git
+   cd Way2Work-UI
+   ```
+2. Install dependencies:
+   npm install
+
+3. Start the development server:
+   npx expo start
+
+4. Scan the QR code with the Expo Go app on your mobile device to view the app. (Android & IOS).
+
+## Contact: 
+Email: steffy199@example.com
+Email: vedang.24.bhagare@gmail.com
+
+
+
+### From Expo: 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
 ## Get started
